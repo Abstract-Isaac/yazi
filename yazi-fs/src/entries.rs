@@ -171,14 +171,14 @@ impl Entries {
 			};
 		}
 
-		let (mut hidden, mut items) = if let Some(filter) = &self.filter {
+		let (mut hidden, mut items): (HashMap<_, _>, HashMap<_, _>) = if let Some(filter) = &self.filter {
 			files
 				.into_iter()
-				.partition(|(_, f)| (f.is_hidden() && !self.show_hidden) || !filter.matches(f.urn()))
+				.partition(|(_, f)| ((f.is_hidden() || self.matches_hide_pattern(f)) && !self.show_hidden) || !filter.matches(f.urn()))
 		} else if self.show_hidden {
-			(HashMap::new(), files)
+			files.into_iter().partition(|(_, f)| self.matches_hide_pattern(f))
 		} else {
-			files.into_iter().partition(|(_, f)| f.is_hidden())
+			files.into_iter().partition(|(_, f)| f.is_hidden() || self.matches_hide_pattern(f))
 		};
 
 		if !items.is_empty() {
@@ -329,15 +329,12 @@ impl Entries {
 		}
 
 		let len = self.items.len();
-		let take =
-			if self.show_hidden { mem::take(&mut self.hidden) } else { mem::take(&mut self.items) };
-		if take.is_empty() {
-			return;
-		}
-
-		let (hidden, items) = self.split_files(take);
-		self.hidden.extend(hidden);
-		self.items.extend(items);
+		// Re-split ALL files (both lists) with the new show_hidden setting
+		let all = mem::take(&mut self.items).into_iter().chain(mem::take(&mut self.hidden));
+		let (hidden, items) = self.split_files(all);
+		self.hidden = hidden;
+		self.items = items;
+		self.sorter.sort(&mut self.items, &self.sizes);
 		self.revision += (self.items.len() != len) as u64;
 	}
 }
