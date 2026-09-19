@@ -8,17 +8,18 @@ use crate::{FILES_TICKET, SortBy, file::File};
 
 #[derive(Default)]
 pub struct Entries {
-	hidden:       Vec<File>,
-	items:        Vec<File>,
-	ticket:       Id,
-	version:      u64,
-	pub revision: u64,
+	hidden:        Vec<File>,
+	items:         Vec<File>,
+	ticket:        Id,
+	version:       u64,
+	pub revision:  u64,
 
-	pub sizes: HashMap<PathBufDyn, u64>,
+	pub sizes:     HashMap<PathBufDyn, u64>,
 
-	sorter:      FilesSorter,
-	filter:      Option<Filter>,
-	show_hidden: bool,
+	sorter:        FilesSorter,
+	filter:        Option<Filter>,
+	show_hidden:   bool,
+	hide_patterns: Vec<String>,
 }
 
 impl Deref for Entries {
@@ -32,7 +33,7 @@ impl DerefMut for Entries {
 }
 
 impl Entries {
-	pub fn new(show_hidden: bool) -> Self { Self { show_hidden, ..Default::default() } }
+	pub fn new(show_hidden: bool, hide_patterns: Vec<String>) -> Self { Self { show_hidden, hide_patterns, ..Default::default() } }
 
 	pub fn update_full(&mut self, files: Vec<File>) {
 		self.ticket = FILES_TICKET.next();
@@ -225,13 +226,46 @@ impl Entries {
 
 	fn split_files(&self, files: impl IntoIterator<Item = File>) -> (Vec<File>, Vec<File>) {
 		let files = files.into_iter().filter(|f| !f.key().is_empty());
+		let hide = !self.show_hidden;
 		if let Some(filter) = &self.filter {
-			files.partition(|f| (f.is_hidden() && !self.show_hidden) || !filter.matches(f.urn()))
-		} else if self.show_hidden {
-			(vec![], files.collect())
+			files.partition(|f| (hide && (f.is_hidden() || self.matches_hide_pattern(f))) || !filter.matches(f.urn()))
+		} else if hide {
+			files.partition(|f| f.is_hidden() || self.matches_hide_pattern(f))
 		} else {
-			files.partition(|f| f.is_hidden())
+			(vec![], files.collect())
 		}
+	}
+
+	fn matches_hide_pattern(&self, file: &File) -> bool {
+		if self.hide_patterns.is_empty() {
+			return false;
+		}
+		let name = file.name();
+		if name.is_none() {
+			return false;
+		}
+		let name_bytes = name.unwrap().encoded_bytes();
+		self.hide_patterns.iter().any(|pattern| {
+			// Simple glob matching: convert * to .* and escape other regex chars
+			let mut regex_pattern = String::from("^");
+			for c in pattern.chars() {
+				match c {
+					'*' => regex_pattern.push_str(".*"),
+					'?' => regex_pattern.push('.'),
+					'.' | '+' | '(' | ')' | '[' | ']' | '{' | '}' | '^' | '$' | '|' | '/' => {
+						regex_pattern.push('\\');
+						regex_pattern.push(c);
+					}
+					_ => regex_pattern.push(c),
+				}
+			}
+			regex_pattern.push('$');
+			if let Ok(re) = regex::bytes::Regex::new(&regex_pattern) {
+				re.is_match(name_bytes)
+			} else {
+				false
+			}
+		})
 	}
 }
 
