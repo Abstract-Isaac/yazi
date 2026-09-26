@@ -48,7 +48,8 @@ impl Actor for Create {
 			}
 
 			let end_sep = AnyAsciiChar::SEP.predicate(*name.encoded_bytes().last().unwrap());
-			Self::r#do(new, dir || end_sep).await
+			let has_ext = name.encoded_bytes().contains(&b'.');
+			Self::r#do(new, dir || end_sep || !has_ext).await
 		});
 		succ!();
 	}
