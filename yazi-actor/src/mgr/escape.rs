@@ -20,6 +20,7 @@ impl Actor for Escape {
 				|| act!(mgr:escape_visual, cx)? != false
 				|| act!(mgr:escape_filter, cx)? != false
 				|| act!(mgr:escape_select, cx)? != false
+				|| act!(mgr:escape_yank, cx)? != false
 				|| act!(mgr:escape_view, cx)? != false;
 			succ!();
 		}
@@ -38,6 +39,9 @@ impl Actor for Escape {
 		}
 		if form.contains(EscapeForm::VIEW) {
 			act!(mgr:escape_view, cx)?;
+		}
+		if form.contains(EscapeForm::YANK) {
+			act!(mgr:escape_yank, cx)?;
 		}
 		succ!();
 	}
@@ -129,6 +133,24 @@ impl Actor for EscapeSelect {
 
 		render!();
 		succ!(true);
+	}
+}
+
+// --- Yank
+pub struct EscapeYank;
+
+impl Actor for EscapeYank {
+	type Form = VoidForm;
+
+	const NAME: &str = "escape_yank";
+
+	fn act(cx: &mut Ctx, _: Self::Form) -> Result<Data> {
+		if cx.mgr.yanked.is_empty() {
+			succ!(false);
+		}
+
+		act!(mgr:unyank, cx)?;
+		succ!(true)
 	}
 }
 

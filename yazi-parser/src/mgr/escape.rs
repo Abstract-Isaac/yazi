@@ -10,6 +10,7 @@ bitflags! {
 		const FILTER = 1 << 2;
 		const SELECT = 1 << 3;
 		const VIEW   = 1 << 4;
+		const YANK   = 1 << 5;
 	}
 }
 
@@ -23,6 +24,7 @@ impl From<ActionCow> for EscapeForm {
 				("filter", true) => acc | Self::FILTER,
 				("select", true) => acc | Self::SELECT,
 				("view", true) => acc | Self::VIEW,
+				("yank", true) => acc | Self::YANK,
 				_ => acc,
 			}
 		})
